@@ -366,7 +366,7 @@ pipe=Pipeline([
 pipe.fit(x_train,y_train)
 
 
-# In[84]:
+# In[95]:
 
 
 y_pred=pipe.predict(x_test)
@@ -383,7 +383,8 @@ with open('laptop_price_model.pkl', 'wb') as f:
     pickle.dump(pipe, f)
 
 
-# In[86]:
+# In[94]:
+
 
 import streamlit as st
 import numpy as np
@@ -467,16 +468,17 @@ if st.sidebar.button("Predict Price"):
     st.subheader("Predicted Price")
     st.write(f"${predicted_price[0]:,.2f}")
 
-# In[ ]:
+
+# In[92]:
 
 
+x_train
 
 
-
-# In[ ]:
-
+# In[91]:
 
 
+y_train
 
 
 # In[ ]:
