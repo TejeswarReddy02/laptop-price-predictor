@@ -383,7 +383,7 @@ with open('laptop_price_model.pkl', 'wb') as f:
     pickle.dump(pipe, f)
 
 
-# In[94]:
+# In[1]:
 
 
 import streamlit as st
@@ -391,7 +391,50 @@ import numpy as np
 import pandas as pd
 import pickle
 
+# ------------------------------
+# Custom CSS for styling with background image and thick prediction output box
+# ------------------------------
+custom_css = """
+<style>
+/* Set a background image for the main container */
+[data-testid="stAppViewContainer"] {
+    background-image: url("https://th.bing.com/th/id/OIP.wffL21MgRXhHrAxLr41dbAHaER?rs=1&pid=ImgDetMain");
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+}
+
+/* Header styling */
+h1, h2, h3, h4, h5, h6 {
+    color: #ffffff;
+    text-shadow: 2px 2px 4px #000000;
+}
+
+/* Sidebar styling: give a semi-transparent white background */
+[data-testid="stSidebar"] {
+    background-color: rgba(255, 255, 255, 0.9);
+}
+
+/* Styling for the prediction output box */
+.prediction-box {
+    background: rgba(0, 0, 0, 0.8);
+    color: #ffffff;
+    padding: 20px;
+    border: 4px solid #ffffff;
+    border-radius: 10px;
+    font-size: 2rem;
+    font-weight: bold;
+    text-align: center;
+    margin-top: 20px;
+}
+</style>
+"""
+
+st.markdown(custom_css, unsafe_allow_html=True)
+
+# ------------------------------
 # Helper function to extract a simplified CPU identifier
+# ------------------------------
 def extract_cpu(cpu_full):
     cpu_full = cpu_full.lower()
     if "i5" in cpu_full:
@@ -407,12 +450,20 @@ def extract_cpu(cpu_full):
     else:
         return cpu_full
 
+# ------------------------------
 # Load your pre-trained model
+# ------------------------------
 with open('laptop_price_model.pkl', 'rb') as f:
     model = pickle.load(f)
 
+# ------------------------------
+# App Title
+# ------------------------------
 st.title("Laptop Price Predictor")
 
+# ------------------------------
+# Sidebar - Input Features
+# ------------------------------
 st.sidebar.header("Input Features")
 
 # Categorical selections
@@ -429,19 +480,20 @@ inches = st.sidebar.number_input("Inches", min_value=10.0, max_value=20.0, value
 weight = st.sidebar.number_input("Weight (kg)", min_value=0.5, max_value=5.0, value=2.0, step=0.1)
 pixel_count = st.sidebar.number_input("Pixel Count", min_value=1000000, max_value=10000000, value=2073600, step=100000)
 
-# CPU selection: Use the full CPU name for display then derive a simplified version for the 'cpu' feature.
+# CPU selection: Use the full CPU name for display, then derive a simplified version for the 'cpu' feature.
 cpu_full = st.sidebar.selectbox("CPU", ['Intel Core i5', 'Intel Core i7', 'Intel Core i3', 'AMD Ryzen', 'Intel Pentium Quad'])
 cpu = extract_cpu(cpu_full)
 
-# For the 'cpu_name' feature, based on your training data this seems to be a flag. We'll set it to 1.
+# For the 'cpu_name' feature, based on your training data this appears to be a flag. We'll set it to 1.
 cpu_name_feature = 1
 
 # Compute interaction features that were used in training
 ram_weight = ram * weight
 inches_weight = inches * weight
 
-# Build the input data dictionary.
-# Note: Column names must match exactly what your model was trained on.
+# ------------------------------
+# Build the input data dictionary
+# ------------------------------
 input_data = {
     'Company': company,
     'TypeName': type_name,
@@ -459,14 +511,16 @@ input_data = {
 # Create a DataFrame from the input data.
 input_df = pd.DataFrame([input_data])
 
+# ------------------------------
+# Prediction Section
+# ------------------------------
 if st.sidebar.button("Predict Price"):
-    # The model was trained on log_price.
-    # Predict the log_price then reverse the transformation.
+    # The model was trained on log_price. Predict the log_price then reverse the transformation.
     prediction_log = model.predict(input_df)
     predicted_price = np.exp(prediction_log)
     
     st.subheader("Predicted Price")
-    st.write(f"${predicted_price[0]:,.2f}")
+    st.markdown(f'<div class="prediction-box">${predicted_price[0]:,.2f}</div>', unsafe_allow_html=True)
 
 
 # In[92]:
