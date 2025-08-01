@@ -390,42 +390,52 @@ import streamlit as st
 import numpy as np
 import pandas as pd
 import pickle
+import os
 
 # ------------------------------
-# Custom CSS for styling with background image and thick prediction output box
+# Custom CSS for styling with a clean background and a polished UI
 # ------------------------------
 custom_css = """
 <style>
-/* Set a background image for the main container */
+/* Streamlit app container with a clean background color */
 [data-testid="stAppViewContainer"] {
-    background-image: url("https://th.bing.com/th/id/OIP.wffL21MgRXhHrAxLr41dbAHaER?rs=1&pid=ImgDetMain");
+    background-color: #f0f2f6;
     background-size: cover;
     background-position: center;
     background-attachment: fixed;
 }
 
-/* Header styling */
+/* Custom font and text color for a modern feel */
 h1, h2, h3, h4, h5, h6 {
-    color: #ffffff;
-    text-shadow: 2px 2px 4px #000000;
+    color: #2c3e50;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-weight: 700;
 }
 
-/* Sidebar styling: give a semi-transparent white background */
+/* Semi-transparent sidebar for readability */
 [data-testid="stSidebar"] {
     background-color: rgba(255, 255, 255, 0.9);
+    border-radius: 10px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
 }
 
 /* Styling for the prediction output box */
 .prediction-box {
-    background: rgba(0, 0, 0, 0.8);
+    background: #2c3e50; /* A sleek, dark background for the result */
     color: #ffffff;
-    padding: 20px;
-    border: 4px solid #ffffff;
-    border-radius: 10px;
-    font-size: 2rem;
+    padding: 30px;
+    border: 3px solid #3498db; /* A blue border for a modern touch */
+    border-radius: 12px;
+    font-size: 2.25rem;
     font-weight: bold;
     text-align: center;
-    margin-top: 20px;
+    margin-top: 30px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+/* General styling for widgets to improve readability */
+.st-bf, .st-br, .st-bu, .st-bv, .st-bw, .st-bx, .st-by, .st-bz {
+    color: #333;
 }
 </style>
 """
@@ -434,6 +444,8 @@ st.markdown(custom_css, unsafe_allow_html=True)
 
 # ------------------------------
 # Helper function to extract a simplified CPU identifier
+# This function is used to convert the full CPU name from the selectbox
+# into a simplified category that the model likely expects.
 # ------------------------------
 def extract_cpu(cpu_full):
     cpu_full = cpu_full.lower()
@@ -448,13 +460,21 @@ def extract_cpu(cpu_full):
     elif "ryzen" in cpu_full:
         return "ryzen"
     else:
+        # Fallback to the full name if none of the keywords match.
+        # This part of the code would need to be very robust in a real-world app.
         return cpu_full
 
 # ------------------------------
-# Load your pre-trained model
+# Load your pre-trained model and column information
+# A robust solution would also save a list of expected columns (from training data)
+# along with the model.
 # ------------------------------
-with open('laptop_price_model.pkl', 'rb') as f:
-    model = pickle.load(f)
+try:
+    with open('laptop_price_model.pkl', 'rb') as f:
+        model = pickle.load(f)
+except FileNotFoundError:
+    st.error("Error: The model file 'laptop_price_model.pkl' was not found.")
+    st.stop()
 
 # ------------------------------
 # App Title
@@ -472,55 +492,82 @@ type_name = st.sidebar.selectbox("TypeName", ['Ultrabook', 'Notebook', '2 in 1 C
 os_value = st.sidebar.selectbox("OS", ['Windows', 'Mac', 'others'])
 gpu = st.sidebar.selectbox("GPU", ['Intel', 'AMD', 'Nvidia'])
 memory_type = st.sidebar.selectbox("Memory Type", ['SSD', 'HDD'])
+cpu_full = st.sidebar.selectbox("CPU", ['Intel Core i5', 'Intel Core i7', 'Intel Core i3', 'AMD Ryzen', 'Intel Pentium Quad'])
 
 # Numeric inputs and sliders
 touchscreen = st.sidebar.checkbox("Touchscreen")
 ram = st.sidebar.slider("RAM (GB)", min_value=4, max_value=32, value=8, step=4)
-inches = st.sidebar.number_input("Inches", min_value=10.0, max_value=20.0, value=15.0, step=0.1)
+inches = st.sidebar.number_input("Screen Size (Inches)", min_value=10.0, max_value=20.0, value=15.0, step=0.1)
 weight = st.sidebar.number_input("Weight (kg)", min_value=0.5, max_value=5.0, value=2.0, step=0.1)
-pixel_count = st.sidebar.number_input("Pixel Count", min_value=1000000, max_value=10000000, value=2073600, step=100000)
-
-# CPU selection: Use the full CPU name for display, then derive a simplified version for the 'cpu' feature.
-cpu_full = st.sidebar.selectbox("CPU", ['Intel Core i5', 'Intel Core i7', 'Intel Core i3', 'AMD Ryzen', 'Intel Pentium Quad'])
-cpu = extract_cpu(cpu_full)
-
-# For the 'cpu_name' feature, based on your training data this appears to be a flag. We'll set it to 1.
-cpu_name_feature = 1
-
-# Compute interaction features that were used in training
-ram_weight = ram * weight
-inches_weight = inches * weight
+pixel_count = st.sidebar.number_input("Total Pixels", min_value=1000000, max_value=10000000, value=2073600, step=100000)
 
 # ------------------------------
-# Build the input data dictionary
-# ------------------------------
-input_data = {
-    'Company': company,
-    'TypeName': type_name,
-    'touchscreen': int(touchscreen),
-    'os': os_value,
-    'GPU': gpu,
-    'Memory_type': memory_type,
-    'Ram_weight': ram_weight,
-    'Inches_weight': inches_weight,
-    'cpu': cpu,
-    'cpu_name': cpu_name_feature,
-    'pixel': pixel_count
-}
-
-# Create a DataFrame from the input data.
-input_df = pd.DataFrame([input_data])
-
-# ------------------------------
-# Prediction Section
+# Preprocessing and Prediction
 # ------------------------------
 if st.sidebar.button("Predict Price"):
-    # The model was trained on log_price. Predict the log_price then reverse the transformation.
-    prediction_log = model.predict(input_df)
-    predicted_price = np.exp(prediction_log)
+    # Create the input data dictionary with both raw and engineered features
+    input_data = {
+        'Company': company,
+        'TypeName': type_name,
+        'touchscreen': int(touchscreen),
+        'os': os_value,
+        'GPU': gpu,
+        'Memory_type': memory_type,
+        'Ram_weight': ram * weight,
+        'Inches_weight': inches * weight,
+        'cpu': extract_cpu(cpu_full),
+        'pixel': pixel_count
+    }
+
+    # The model was likely trained on a one-hot encoded DataFrame.
+    # We need to recreate that structure for prediction.
+    # A robust app would store the columns from training time and use them here.
+    # For this example, we will generate the dummies dynamically.
     
-    st.subheader("Predicted Price")
-    st.markdown(f'<div class="prediction-box">${predicted_price[0]:,.2f}</div>', unsafe_allow_html=True)
+    # Define a list of all possible categories for each categorical feature
+    # This is a crucial step to ensure the one-hot encoded columns are consistent
+    # with the training data, even if a user doesn't select all options.
+    cat_features = {
+        'Company': ['Apple', 'HP', 'Lenovo', 'Acer', 'Asus', 'others', 'Toshiba'],
+        'TypeName': ['Ultrabook', 'Notebook', '2 in 1 Convertible'],
+        'os': ['Windows', 'Mac', 'others'],
+        'GPU': ['Intel', 'AMD', 'Nvidia'],
+        'Memory_type': ['SSD', 'HDD'],
+        'cpu': ['i5', 'i7', 'i3', 'quad', 'ryzen']
+    }
+    
+    # Create a DataFrame from the input data
+    input_df = pd.DataFrame([input_data])
+    
+    # One-hot encode the categorical features
+    # This function creates new binary columns for each category
+    input_encoded = pd.get_dummies(input_df, columns=list(cat_features.keys()), prefix=list(cat_features.keys()))
+
+    # Ensure all columns from the training data are present.
+    # This is a simplified way to handle missing one-hot encoded columns.
+    # A real-world solution would use a saved list of columns.
+    all_cols = []
+    for col, categories in cat_features.items():
+        all_cols.extend([f'{col}_{cat}' for cat in categories])
+
+    # Add the remaining numeric/engineered features
+    all_cols.extend(['touchscreen', 'Ram_weight', 'Inches_weight', 'pixel'])
+    
+    # Reindex the DataFrame to ensure it has all the columns the model expects
+    # and fills missing columns with zeros.
+    input_final = input_encoded.reindex(columns=all_cols, fill_value=0)
+
+    # Make the prediction
+    try:
+        # The model was trained on log_price. Predict the log_price then reverse the transformation.
+        prediction_log = model.predict(input_final)
+        predicted_price = np.exp(prediction_log)
+        
+        st.subheader("Predicted Price")
+        st.markdown(f'<div class="prediction-box">${predicted_price[0]:,.2f}</div>', unsafe_allow_html=True)
+    except Exception as e:
+        st.error(f"Prediction failed. An error occurred during prediction: {e}")
+
 
 
 # In[92]:
